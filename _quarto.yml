@@ -7,7 +7,7 @@ book:
   author: 
     - name: Fabricio Almeida-Silva
       orcid: 0000-0002-5314-2964
-  date: "2023"
+  date: "April 2024"
   chapters:
     - index.qmd
     - chapters/00_setup.qmd
