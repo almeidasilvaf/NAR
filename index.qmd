@@ -1,0 +1,13 @@
+
+# Preface {.unnumbered}
+
+This book contains the materials for the course
+*Network Analysis in R*, which I offer
+in partnership with [Physalia courses](https://www.physalia-courses.org/).
+This is a 4-day course, and each chapter of this book contains the materials
+for one day. In details:
+
+1. Networks in data: an introduction to {igraph}
+2. Network statistics
+3. Network modeling
+4. Network visualization

@@ -1,0 +1,869 @@
+---
+execute: 
+  warning: false
+  eval: true
+knitr:
+    opts_chunk: 
+      fig.align: center
+---
+
+# Network visualization
+
+In this lesson, you will learn how to visualize networks using the
+ggplot plotting system. At the end of this lesson, you will be able to:
+
+- convert `igraph` objects to their *tidy* representation;
+- identify which network layout to use for each kind of network data;
+- modify aesthetic properties of nodes and edges;
+- enhance visualizations for large graphs.
+
+Let's start by loading the packages we will use.
+
+```{r}
+set.seed(123) # for reproducibility
+
+# Load required packages
+library(here)
+library(igraph)
+library(igraphdata)
+library(tidyverse)
+library(tidygraph)
+library(ggraph)
+library(patchwork)
+
+set_graph_style(plot_margin = margin(1,1,1,1))
+```
+
+## Tidy graph representations
+
+To create plots using the ggplot plotting system, one needs to have tidy data
+in the long format (as in the tidyverse nomenclature), which is summarized
+below.
+
+![](tidydata.jpg){fig-align="center"}
+
+To convert `igraph` objects to a tidy data frame, you can use 
+the `r BiocStyle::CRANpkg("tidygraph")` package, which offers a tidy API
+for graph manipulation. In particular, we are mostly interested in the function
+`as_tbl_graph`, which converts `igraph` objects to `tbl_graph` objects
+containing nodes and edges (with attributes, if any) in a tidy format. Let's
+demonstrate it with the karate network we've been using in previous chapters.
+
+```{r}
+# Get karate club network
+g <- make_graph("Zachary")
+
+# Convert `igraph` object to tidy `tbl_graph`
+graph_df <- as_tbl_graph(g)
+
+graph_df
+```
+
+We can see that this `tbl_graph` object contains only edge information,
+because the original `igraph` object does not contain node attributes.
+For example, let's now do the same with the `macaque` network data from the
+`r BiocStyle::CRANpkg("igraphdata")` package.
+
+```{r}
+data(macaque)
+
+# Convert `igraph` object to tidy `tbl_graph`
+macaque_df <- as_tbl_graph(macaque)
+
+macaque_df
+```
+
+## Plotting networks
+
+The `r BiocStyle::CRANpkg("ggraph")` package is arguably one of the most
+popular R packages to visualize networks using the ggplot system. This
+package was designed to interoperate with `r BiocStyle::CRANpkg("tidygraph")`,
+and it can produce network visualizations from `tbl_graph` objects 
+in many ways. In the sections below, we will explore the building blocks
+of plots produced with __ggraph__.
+
+### Layouts
+
+When plotting networks, a very important step consists in choosing an 
+appropriate layout to use. Layouts algorithms are algorithms that take 
+a graph structure and return the x and y coordinates of the nodes.
+
+To start, let's create a basic network plot using the `highschool` data set,
+which contains friendship relationships among high school boys in 1957
+and 1958. We will use the default layout.
+
+```{r}
+# Create `tbl_graph` object
+gdf <- as_tbl_graph(highschool)
+
+ggraph(gdf) +
+    geom_edge_link(aes(color = factor(year))) +
+    geom_node_point()
+```
+
+By default, the function `ggraph()` uses the "stress" layout, a slightly 
+modified version of the stress-minimization algorithm Kamada-Kawai.
+However, `ggraph()` offers multiple layout algorithms, including
+internal __igraph__ layout algorithms (available in __igraph__'s functions
+`layout_with_*()`). You can explore all available layouts by running
+`?create_layout()`.
+
+Different layout algorithms can be specified in the `layout` argument of the
+`ggraph()` function. For example, let's recreate the network plot above, but
+now with the **'kk'** layout (internal igraph layout).
+
+```{r}
+ggraph(gdf, layout = "kk") +
+    geom_edge_link(aes(color = factor(year))) +
+    geom_node_point()
+```
+
+If you look at the documentation of the function `igraph::layout_with_kk()`,
+you will notice that this layout algorithm can take additional parameters (as
+do most layout algorithms). These additional parameters can be passed 
+to `ggraph()` as well.
+
+```{r}
+ggraph(gdf, layout = "kk", maxiter = 100) +
+    geom_edge_link(aes(color = factor(year))) +
+    geom_node_point()
+```
+
+Alternatively, you can also use the function `create_layout()` to get
+a data frame of x and y coordinates for nodes based on a specific layout
+algorithm. Under the hood, this is what `ggraph()` does.
+
+```{r}
+# Get a data frame of x and y coordinates based on layout 'kk'
+coords <- create_layout(gdf, layout = "kk")
+
+head(coords)
+
+# Plot network using the data frame of coordinates
+ggraph(coords) + 
+  geom_edge_link(aes(color = factor(year))) + 
+  geom_node_point()
+```
+
+__ggraph__ includes all layouts in the packages `r BiocStyle::CRANpkg("igraph")`
+and `r BiocStyle::CRANpkg("graphlayouts")`, as well as specialized layouts
+that are only available in __ggraph__. We will explore some layout options
+in the subsections below.
+
+::: {.callout-tip}
+
+### Practice
+
+1. Using the `macaque` network, create a network plot that matches the 
+following requirements:
+
+- Layout: 'kk'
+- Edge color: 'gray80'
+- Node color and shape should be mapped to node attribute **shape**.
+
+*Hint:* mapping variables to plot aesthetics works just like in any other
+plot created with the ggplot system.
+
+
+2. Recreate the same plot as above, but now using the layouts 'graphopt',
+'circle', and 'fr'.
+
+::: {.callout appearance="minimal" collapse="true"}
+
+### Show me the solutions
+
+```{r}
+g <- as_tbl_graph(macaque)
+
+# Q1
+ggraph(g, layout = "kk") +
+    geom_edge_link(color = "gray80") +
+    geom_node_point(aes(shape = shape, color = shape))
+
+# Q2
+ggraph(g, layout = "graphopt") +
+    geom_edge_link(color = "gray80") +
+    geom_node_point(aes(shape = shape, color = shape))
+
+ggraph(g, layout = "circle") +
+    geom_edge_link(color = "gray80") +
+    geom_node_point(aes(shape = shape, color = shape))
+
+ggraph(g, layout = "fr") +
+    geom_edge_link(color = "gray80") +
+    geom_node_point(aes(shape = shape, color = shape))
+```
+
+:::
+:::
+
+
+#### Circular layouts
+
+Some relationships in network data are better visualized if represented
+in a circular fashion You can create circular representations by 
+setting `circular = TRUE` in `ggraph()`. To demonstrate, let's create the
+same kind of network plot, an **arc diagram**, in standard and circular layout.
+
+```{r}
+#| fig-height: 7
+#| fig-width: 5
+# 1) Arc diagram - standard representation
+p1 <- ggraph(gdf, layout = 'linear') + 
+  geom_edge_arc(aes(colour = factor(year)))
+
+# 2) Chord diagram - circular representation
+p2 <- ggraph(gdf, layout = 'linear', circular = TRUE) + 
+  geom_edge_arc(aes(colour = factor(year)))
+
+p1 / p2
+```
+
+You may have noticed that the network layout (and everything else) remains
+the same in both plots, and the only difference is that the second plot was 
+created by representing the layout in a circular fashion. Note also that
+representing a layout circularly often changes the "name" of the visualization
+(i.e., how people often refer to it). In this example, you can clearly see
+that a so-called **chord diagram** is simply an **arc diagram** represented
+circularly.
+
+Another example of how circular representations can change a visualization's 
+"name" is the distinction between **icicle plots** and **sunburst plots**,
+both of which represent hierarchical data, but latter method does so
+in a circular fashion. To demonstrate, let's create both plots using 
+the `flare` data set, which contains a graph describing the class hierarchy
+for the Flare ActionScript visualization library.
+
+```{r}
+#| fig-width: 8
+#| fig-height: 4
+
+# Create `tbl_graph` object from flare data set
+fg <- tbl_graph(flare$vertices, flare$edges)
+
+# 1) Icicle plot - standard representation
+p1 <- ggraph(fg, "partition") +
+    geom_node_tile(aes(fill = depth), linewidth = 0.2)
+
+# 1) Sunburst plot - standard representation
+p2 <- ggraph(fg, "partition", circular = TRUE) +
+    geom_node_arc_bar(aes(fill = depth), linewidth = 0.2) +
+    coord_fixed()
+
+p1 + p2
+```
+
+#### Node-edge layouts
+
+When people think about network visualizations, node-edge diagrams are arguably
+the first picture that comes to their mind. __igraph__ offers many layout 
+algorithms to create such plots, each of them optimized for a different
+scenario. Thus, there is no such thing as "the best layout algorithm", and
+you should try different algorithms for your network to see what looks better.
+
+To demonstrate some of these family of algorithms and how you can explore
+how the plots they create look like, we will store layout names in a vector
+and loop through them, passing them as input to the `layout` argument
+of `ggraph()` in each iteration. Recall that this is possible because
+different layouts can be used by simply changing the input to the `layout` 
+argument.
+
+```{r}
+# Define layout names we want to try
+layouts <- c("stress", "fr", "lgl", "graphopt")
+
+# Create the same plot, but changing input to `layout` argument
+plots <- lapply(layouts, function(x) {
+    
+    p <- ggraph(highschool, layout = x) + 
+        geom_edge_link(aes(colour = factor(year)), show.legend = FALSE) +
+        geom_node_point() + 
+        labs(title = paste0('Layout: ', x))
+    
+    return(p)
+})
+
+wrap_plots(plots, nrow = 2)
+```
+
+#### Hive plots
+
+Hive plots have become increasingly popular to visualize large networks,
+because they display nodes on radially distributed linear axes, each axis
+representing a level of a node attribute. For example, using the `highschool`
+data set, let's create a variable `friends` indicating whether each person
+has few, medium, or many friends.
+
+```{r}
+# Add degree information to highschool network
+hs_graph <- as_tbl_graph(highschool) |>
+    mutate(degree = centrality_degree(mode = "in")) |>
+    mutate(
+        friends = case_when(
+            degree <5 ~ "few",
+            degree >=15 ~ "many",
+            TRUE ~ "medium"
+        )
+    )
+
+hs_graph
+```
+
+Now, we can create a hive plot showing each level of the `friends` variable
+(few, many, and medium) as an axis, with nodes mapped to each axis sorted
+by their degrees.
+
+```{r}
+# Create a hive plot
+ggraph(hs_graph, "hive", axis = friends, sort.by = degree) + 
+    geom_edge_hive(aes(colour = factor(year))) + 
+    geom_axis_hive(aes(colour = friends), linewidth = 2, label = FALSE) + 
+    coord_fixed()
+```
+
+#### Focal layouts
+
+Focal layouts are used to display all nodes relative to a central node (or
+group of nodes). The focal nodes can be, for example, nodes with high degree,
+or a node you want to highlight.
+
+```{r}
+ggraph(highschool, "focus", focus = node_is_center()) + 
+    ggforce::geom_circle(
+        data = data.frame(r = 1:5), 
+        aes(x0 = 0, y0 = 0, r = r), 
+        colour = "grey"
+    ) + 
+    geom_edge_link() + 
+    geom_node_point() + 
+    coord_fixed()
+```
+
+
+
+#### Hierarhical layouts
+
+Hierarchical layouts are optimized to represent tree-like data, and `ggraph`
+offers several algorithms for such data, including 'ciclepack', 'treemap',
+'cactustree', 'tree', and 'dendrogram'. Here, we will focus on the most 
+commonly used ones using the `flare` data set.
+
+The *'circlepack'* layout, like some other hierarchical layouts, can be used
+to display relations with enclosure and positions only, or with edges too.
+Let's demonstrate both ways.
+
+```{r}
+#| fig-height: 6
+#| fig-width: 4
+
+# Create `tbl_graph` object
+graph <- tbl_graph(flare$vertices, flare$edges)
+
+# 1) Only enclosure and positions
+p1 <- ggraph(graph, "circlepack", weight = size) + 
+    geom_node_circle(aes(fill = depth), size = 0.25, n = 50) + 
+    coord_fixed()
+
+# 2) Include edges
+p2 <- ggraph(graph, "circlepack", weight = size) + 
+    geom_edge_link() + 
+    geom_node_point(aes(colour = depth)) +
+    coord_fixed()
+
+p1 / p2
+```
+
+The same data can also be represented as a tree using the *'tree'* layout.
+
+```{r}
+ggraph(graph, "tree") +
+    geom_edge_diagonal()
+```
+
+In a tree representation, when node heights are important (with nested
+relations, as in `hclust` objects), you would probably prefer to use 
+a *'dendrogram'* layout instead. To demonstrate this, let's create a dendrogram
+from the `iris` data set.
+
+```{r}
+# Create `hclust` object
+dendrogram <- hclust(dist(iris[, 1:4]))
+
+ggraph(dendrogram, "dendrogram", height = height) +
+    geom_edge_elbow()
+```
+
+::: {.callout-tip}
+
+### Practice
+
+For each of the data sets below, choose a suitable layout and plot them.
+
+```{r}
+# Data set 1
+ds1 <- hclust(dist(USArrests), "average")
+
+# Data set 2
+data(UKfaculty)
+ds2 <- UKfaculty
+```
+
+::: {.callout appearance="minimal" collapse="true"}
+
+### Show me the solutions
+
+```{r}
+# Data set 1
+ggraph(ds1, "dendrogram", height = height) +
+    geom_edge_elbow()
+
+# Data set 2
+ggraph(ds2, "stress") +
+    geom_edge_link(alpha = 0.5, linewidth = 0.2)
+```
+
+:::
+:::
+
+### Nodes and edges
+
+__ggraph__ offers different node and edge options with the family of functions
+`geom_node_*()` and `geom_edge_*()`. Each function from each family is
+used for a specific kind of visualization, and below we're going to explore
+the main ones.
+
+#### Node options: `geom_node_*()`
+
+The most common node geom is `geom_node_point()`, which is used to create
+classical node-edge diagrams. Let's take a look at an example below.
+
+```{r}
+g <- as_tbl_graph(highschool)
+ggraph(g) +
+    geom_edge_link(color = "gray70") +
+    geom_node_point()
+```
+
+The function `geom_node_voronoi()` display nodes as cells from a 
+voronoi tesselation, and it can be useful to show dominance of certain
+node types.
+
+```{r}
+graph <- create_notable('meredith') |> 
+    mutate(group = sample(c('A', 'B'), n(), TRUE))
+
+ggraph(graph) + 
+    geom_node_voronoi(aes(fill = group), max.radius = 1) + 
+    geom_node_point() + 
+    geom_edge_link() + 
+    coord_fixed()
+```
+
+The function `geom_node_tile()` is typically used together 
+with `layout = 'treemap'` and `layout = 'partition'`. Let's see some examples.
+
+```{r}
+#| fig-width: 7
+#| fig-height: 6
+
+# Create `tbl_graph` from flare data set
+graph <- tbl_graph(flare$vertices, flare$edges)
+
+# 1) Icicle diagram
+p1 <- ggraph(graph, layout = 'partition') + 
+    geom_node_tile(aes(y = y, fill = depth))
+
+# 2) Treemap
+p2 <- ggraph(graph, layout = 'treemap', weight = size) + 
+    geom_node_tile(aes(fill = depth))
+
+p1 / p2
+```
+
+To view all functions in the `geom_node_*()` family, you can 
+execute `??ggraph::geom_node_`.
+
+#### Edge options: `geom_edge_*()`
+
+As we've seen before, the most common edge geom is `geom_edge_link()`,
+which simply draws a line between two nodes.
+
+```{r}
+g <- as_tbl_graph(highschool)
+
+ggraph(g) +
+    geom_edge_link(aes(color = factor(year)))
+```
+
+In case there are multiple edges between the same nodes, a better way of
+representing them would be using the functions `geom_edge_fan()` and
+`geom_edge_parallel()`, as demonstrated below.
+
+```{r}
+#| fig-height: 6
+#| fig-width: 5
+#| fig-align: 'center'
+
+# 1) geom_edge_fan() - multi-edges as arcs with different curvature
+p1 <- ggraph(g) +
+    geom_edge_fan(aes(color = factor(year)))
+
+# 2) geom_edge_parallel() - multi-edges as parallel lines
+p2 <- ggraph(g) +
+    geom_edge_parallel(aes(color = factor(year)))
+
+p1 / p2
+```
+
+In some cases, arcs are a better way of representing edges, either in a linear
+or circular representation. Arcs can be created with `geom_edge_arc()`.
+
+```{r}
+#| fig-height: 7
+#| fig-width: 5
+#| fig-align: 'center'
+
+# 1) geom_edge_arc(), linear
+p1 <- ggraph(g, layout = "linear") +
+    geom_edge_arc(aes(color = factor(year))) +
+    coord_fixed()
+
+# 2) geom_edge_arc(), circular
+p2 <- ggraph(g, layout = "linear", circular = TRUE) +
+    geom_edge_arc(aes(color = factor(year))) +
+    coord_fixed()
+
+p1 / p2
+```
+
+Another technique for drawing edges is **bundling**, which consists in
+bundling edges that flow in the same direction to avoid clutter. Many bundling
+algorithms exist, but __ggraph__ offers 3 algorithms: force-directed,
+edge path, and minimal, available in geoms `geom_edge_bundle_force()`,
+`geom_edge_bundle_path()`, and `geom_edge_bundle_minimal()`, respectively.
+Let's demonstrate each of them.
+
+```{r}
+#| fig-height: 8
+#| fig-width: 5
+#| fig-align: 'center'
+
+# Bundling with force-directed algorithm
+p1 <- ggraph(g) +
+    geom_edge_bundle_force()
+
+# Bundling with edge path algorithm
+p2 <- ggraph(g) +
+    geom_edge_bundle_path()
+
+# Bundling with minimal algorithm
+p3 <- ggraph(g) +
+    geom_edge_bundle_minimal()
+
+p1 / p2 / p3
+```
+
+To visualize hierarchical data as a dendrogram, you can use `geom_edge_elbow()`
+or its smoother alternatives `geom_edge_diagonal()` and `geom_edge_bend()`.
+
+```{r}
+#| fig-width: 8
+#| fig-height: 5
+
+h <- hclust(dist(iris[, 1:4]))
+
+# Dendrogram, elbow
+p1 <- ggraph(h, layout = "dendrogram", height = height) +
+    geom_edge_elbow()
+
+# Dendrogram, diagonal
+p2 <- ggraph(h, layout = "dendrogram", height = height) +
+    geom_edge_diagonal()
+
+# Dendrogram, bend
+p3 <- ggraph(h, layout = "dendrogram", height = height) +
+    geom_edge_bend()
+
+p1 + p2 + p3
+```
+
+Importantly, many edge geoms (including `geom_edge_elbow()`) can take a
+*strength* argument (from 0 to 1; default = 1) that indicates how much 
+the line deviates from a straight line. This way, you can plot a dendrogram
+with `geom_edge_elbow()` that looks similar to one created 
+with `geom_edge_diagonal()`.
+
+```{r}
+ggraph(h, layout = "dendrogram", height = height) +
+    geom_edge_elbow(strength = 0.5)
+```
+
+Finally, you can also decorate your edges with arrows and labels. To add
+arrows, you will use the `arrow()` function in the *arrow* argument of
+the edge geom. It's also important to specify a cap in argument *end_cap*
+so that the arrows have some distance from terminal nodes. Here is an
+example:
+
+```{r}
+# Create 'bull' graph with {igraph} and add edge attributes
+bull <- make_graph("Bull")
+E(bull)$type <- sample(c("friend", "foe"), ecount(bull), TRUE)
+gbull <- as_tbl_graph(bull)
+
+# Plot graph with edges
+ggraph(gbull, layout = 'graphopt') + 
+    geom_edge_link(
+        arrow = arrow(length = unit(4, 'mm')), 
+        end_cap = circle(3, 'mm')
+    ) + 
+    geom_node_point(size = 5)
+```
+
+To include edge labels in this same graph, you'd do:
+
+```{r}
+ggraph(gbull, layout = 'graphopt') + 
+    geom_edge_link(
+        aes(label = type),
+        angle_calc = "along",
+        label_dodge = unit(2.5, "mm"),
+        arrow = arrow(length = unit(4, 'mm')), 
+        end_cap = circle(3, 'mm')
+    ) + 
+    geom_node_point(size = 5)
+```
+
+::: {.callout-tip}
+
+### Practice
+
+In the plot above, with edges having labels and arrows, what happens if
+you remove the arguments `angle_calc = "along"` and 
+`label_dodge = unit(2.5, "mm")`? Based on what you observe, what do
+these arguments control?
+
+::: {.callout appearance="minimal" collapse="true"}
+
+### Show me the solutions
+
+```{r}
+# Removing `label_dodge` -> labels will be placed on top of the lines
+ggraph(gbull, layout = 'graphopt') + 
+    geom_edge_link(
+        aes(label = type),
+        angle_calc = "along",
+        arrow = arrow(length = unit(4, 'mm')), 
+        end_cap = circle(3, 'mm')
+    ) + 
+    geom_node_point(size = 5)
+
+# Removing `angle_calc` -> labels will all have the same rotation
+ggraph(gbull, layout = 'graphopt') + 
+    geom_edge_link(
+        aes(label = type),
+        arrow = arrow(length = unit(4, 'mm')), 
+        end_cap = circle(3, 'mm')
+    ) + 
+    geom_node_point(size = 5)
+```
+
+:::
+:::
+
+
+## Visualizing large networks
+
+In real-world network data analyses, we often work with large networks.
+While visualizing very large networks is generally not recommended
+(because it's hard to extract meaningful information from such visualizations),
+sometimes they can be useful to explore group structure in graphs. In this 
+final section, we will use the Game of Thrones network we explored
+in previous chapters to demonstrate best practices to get the most out of
+network visualizations, especially for large networks. 
+
+Let's start by loading the data set and creating a simple node-edge
+diagram (or hairball) with default parameters.
+
+```{r}
+# Load data set
+got <- readRDS(here("data", "got.rds"))
+
+# Get `tbl_graph` and plot it
+g <- as_tbl_graph(got)
+
+p1 <- ggraph(g) + 
+    geom_edge_link() +
+    geom_node_point()
+
+p1
+```
+
+This is a relatively large network (N = 107 nodes), and a simple visualization
+with default parameters does not work so well. We can hardly extract any useful
+information from it. The first and very important thing you'd want to change
+in this plot would be **node size** and **colors**. It is considered standard
+practice to color nodes based on their shared properties (such as communities
+inferred with community detection algorithms), and to give them variables
+sizes based on their degree. Let's do this.
+
+```{r}
+# Add `degree` and `cluster` node attributes
+V(got)$cluster <- cluster_louvain(got) |> membership() |> as.character()
+V(got)$degree <- degree(got)
+
+g <- as_tbl_graph(got)
+
+p2 <- ggraph(g) + 
+    geom_edge_link() +
+    geom_node_point(aes(size = degree, fill = cluster), shape = 21)
+
+p2
+```
+
+This looks much better, right? But we can still improve it further. We can see
+that a part of the graph is densely connected, which makes it a bit cluttered.
+To make it look better, we can reduce line widths, and add a bit of 
+transparency to the edges.
+
+```{r}
+p3 <- ggraph(g) + 
+    geom_edge_link(linewidth = 0.2, alpha = 0.6) +
+    geom_node_point(aes(size = degree, fill = cluster), shape = 21)
+
+p3
+```
+
+Lastly, we can also use a better color palette.
+
+```{r}
+p4 <- ggraph(g) + 
+    geom_edge_link(linewidth = 0.2, alpha = 0.6) +
+    geom_node_point(aes(size = degree, fill = cluster), shape = 21) +
+    scale_fill_brewer(palette = "Set1")
+
+p4
+```
+
+By simply changing the aesthetics of nodes and edges, this is how we made
+out plot look better:
+
+```{r}
+#| echo: false
+#| fig-width: 8
+#| fig-height: 5
+wrap_plots(
+    p1 + labs(title = "Before"), 
+    p4 + theme(legend.position = "none") + labs(title = "After")
+)
+```
+
+Besides changing node and edge aesthetics, playing with different layouts
+is also very important when visualizing large networks. The default layouts
+in __ggraph__ (*'stress'* for most networks, and *'sparse_stress'* for very
+large networks) are excellent layouts that generally work well, but you
+might want to test other approaches for large networks.
+
+A common approach consists in using focal layouts to emphasize certain nodes.
+This can be done using `layout = "focus"` (to focus on a central node) or
+`layout = "centrality"` (similar to 'focus', but using a centrality measure).
+
+```{r}
+# 'focus' layout
+p1 <- ggraph(g, layout = "focus", focus = node_is_center()) + 
+    geom_edge_link(linewidth = 0.2, alpha = 0.6) +
+    geom_node_point(aes(size = degree, fill = cluster), shape = 21) +
+    scale_fill_brewer(palette = "Set1") + 
+    coord_fixed() +
+    theme(legend.position = "none")
+
+# 'centrality' layout (degree as centrality measure)
+p2 <- ggraph(g, layout = "centrality", centrality = centrality_degree()) + 
+    geom_edge_link(linewidth = 0.2, alpha = 0.6) +
+    geom_node_point(aes(size = degree, fill = cluster), shape = 21) +
+    scale_fill_brewer(palette = "Set1") + 
+    coord_fixed() +
+    theme(legend.position = "none")
+
+p1 + p2
+```
+
+A big advantage of these layouts, especially the *'centrality'* layout, is 
+that it's easier to see node labels, so we can quickly see which nodes are the
+most important ones in the network. We can add node labels with `geom_node_text`.
+
+```{r}
+# Add text to label nodes
+p2 + geom_node_text(aes(label = name, size = degree), repel = TRUE)
+```
+
+Finally, the *'backbone'* layout can help emphasize hidden group structures
+in a graph, and its popularity has increased a lot, especially when
+visualizing large graphs.
+
+```{r}
+ggraph(g, layout = "backbone", keep = 0.4) +
+    geom_edge_link(linewidth = 0.2, alpha = 0.6) +
+    geom_node_point(aes(size = degree, fill = cluster), shape = 21) +
+    scale_fill_brewer(palette = "Set1")
+```
+
+As stated before, it is generally recommended to test multiple layout 
+algorithms, as each of them is optimized for a specific purpose.
+
+
+::: {.callout-tip}
+
+### Challenge
+
+The `yeast` network is a very large network containing 2617 nodes. Use
+the techniques you learned to visualize this network in an efficient way.
+Test at least two layouts.
+
+You can load the data set using the code below.
+
+```{r}
+data(yeast)
+```
+
+*Hint:* this network contains a node attribute named `Class` that could
+be used to group nodes.
+
+::: {.callout appearance="minimal" collapse="true"}
+
+### Show me the solutions
+
+**Note:** there is no single *right* solution for this challenge, but below
+is a possible approach.
+
+```{r}
+# Decompose graph and get giant component
+g <- decompose(yeast)[[1]]
+
+# Add `degree` and `cluster` node attributes
+V(g)$degree <- degree(g)
+
+# 'backbone' layout
+ggraph(g, layout = "backbone", keep = 0.4) +
+    geom_edge_link(linewidth = 0.1, alpha = 0.6) +
+    geom_node_point(aes(size = degree, fill = Class), shape = 21) +
+    theme(legend.position = "none")
+
+# 'sparse_stress' layout
+ggraph(g) +
+    geom_edge_link(linewidth = 0.1, alpha = 0.6) +
+    geom_node_point(aes(size = degree, fill = Class), shape = 21) +
+    theme(legend.position = "none")
+```
+
+:::
+:::
+
+
+## Session information {.unnumbered}
+
+This chapter was created under the following conditions:
+
+```{r}
+#| echo: false
+sessioninfo::session_info()
+```

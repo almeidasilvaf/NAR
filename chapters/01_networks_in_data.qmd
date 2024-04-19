@@ -1,0 +1,645 @@
+---
+execute: 
+  warning: false
+---
+
+# Networks in data: an introduction to __{igraph}__
+
+In this lesson, you will learn how to create graphs from data,
+and how to process and modify `igraph` objects. At the end of this lesson, 
+you will be able to:
+
+- create graphs from edge lists and adjacency matrices;
+- manipulate `igraph` objects;
+- explore node and edge attributes;
+- distinguish different kinds of graphs.
+
+Let's start by loading the packages we will use.
+
+```{r}
+#| message: false
+
+set.seed(123) # for reproducibility
+
+# Load required packages
+library(here)
+library(tidyverse)
+library(igraph)
+```
+
+## Creating `igraph` objects
+
+### Option 1: the `make_*` functions
+
+The **igraph** package provides users with a set of functions starting with
+`make_*` that can be used to create graphs. The simplest one
+is `make_empty_graph()`, which creates an empty graph (no edges) with as many
+nodes as you wish. For example:
+
+```{r}
+# Creating an empty graph with 10 nodes
+g <- make_empty_graph(10)
+
+# Showing the igraph object, and its nodes and edges
+g
+
+V(g)
+E(g)
+
+# Quickly visualize the graph
+plot(g)
+```
+
+The exact opposite of `make_empty_graph()` is the function `make_full_graph()`,
+which creates a fully connected graph.
+
+```{r}
+# Create a fully connected graph
+g <- make_full_graph(n = 10)
+
+# Show nodes and edges, and plot it
+V(g)
+E(g)
+
+plot(g)
+```
+
+To create a custom graph from pre-defined edges, you'd use the function
+`make_graph()`, which is very flexible. For example, suppose you want to
+create a graph based on the following description:
+
+- 10 nodes;
+- 2 edges connecting nodes 1 and 2, and nodes 1 and 5.
+
+You can do that with `make_graph()` as follows:
+
+```{r}
+g <- make_graph(edges = c(1, 2, 1, 5), n = 10, directed = FALSE)
+
+plot(g)
+```
+
+Alternatively, you can use igraph's formula notation in `make_graph()`:
+
+```{r}
+g2 <- make_graph(~ 1--2, 1--5, 3, 4, 5, 6, 7, 8, 9, 10)
+
+plot(g2)
+```
+
+Both approaches above result in the same graph. This can be checked with:
+
+```{r}
+isomorphic(g, g2)
+```
+
+::: {.callout-tip}
+
+### Practice
+
+1. Create a graph with the following properties:
+
+- 4 nodes named *A*, *B*, *C*, and *D*
+- Edges between node A and all other nodes
+
+2. Recreate the graphs below using the `make_graph()` function.
+
+```{r}
+#| layout-ncol: 2
+#| fig-height: 6
+#| fig-dpi: 300
+#| echo: false
+
+g1 <- make_graph(edges = c(1,2, 1,3, 1,4, 1,5, 1,6), n = 6, directed = FALSE)
+g2 <- make_graph(~ A--B, B--C, C--D, D--E)
+g3 <- make_graph(~A--B, B--C, C--A)
+g4 <- make_graph(~A--B, B--C, B--D, C--E, C--F)
+
+plot(g1)
+plot(g2)
+plot(g3)
+plot(g4)
+```
+
+3. The function `make_graph()` can also create some notable graphs when
+users specify their names as input. Read the documentation of this function
+(accessible by running `?make_graph`) and visualize at least 5 examples.
+
+::: {.callout appearance="minimal" collapse="true"}
+
+### Show me the solutions
+
+```{r}
+# Q1
+g1 <- make_graph(edges = c("A", "B", "A", "C", "A", "D"))
+
+# Q2
+g1 <- make_graph(edges = c(1,2, 1,3, 1,4, 1,5, 1,6), n = 6, directed = FALSE)
+g2 <- make_graph(~ A--B, B--C, C--D, D--E)
+g3 <- make_graph(~A--B, B--C, C--A)
+g4 <- make_graph(~A--B, B--C, B--D, C--E, C--F)
+
+# Q3
+solids <- list(
+  make_graph("Tetrahedron"),
+  make_graph("Cubical"),
+  make_graph("Octahedron"),
+  make_graph("Dodecahedron"),
+  make_graph("Icosahedron")
+)
+
+plot(solids[[1]])
+plot(solids[[2]])
+plot(solids[[3]])
+plot(solids[[4]])
+plot(solids[[5]])
+```
+
+:::
+:::
+
+### Option 2: from an adjacency matrix
+
+Constructing graphs manually using the `make_graph()` function can be useful
+for schematic examples or for very small graphs. However, real-world network
+analyses usually involve working with large graphs, with hundreds (or even
+thousands) of nodes. A very common way of representing networks with data
+consists in using **adjacency matrices**. An adjacency matrix $m_{ij}$ contains 
+nodes in rows and columns, and matrix elements indicate whether there is an 
+edge between nodes *i* and *j*. Let's simulate an adjacency matrix:
+
+```{r}
+# Simulate an adjacency matrix
+adjm <- matrix(
+    sample(0:1, 100, replace = TRUE, prob = c(0.9, 0.1)), 
+    ncol = 10,
+    dimnames = list(LETTERS[1:10], LETTERS[1:10])
+)
+
+adjm
+```
+
+In this example, we have a binary matrix, with 1 indicating that two nodes
+interact, and 0 indicating otherwise. We could also have numeric values
+(e.g., from 0 to 1) in matrix elements instead of 0s and 1s, 
+which would then indicate the strength of the link between two nodes.
+You can create an `igraph` object from an adjacency matrix with the function
+`graph_from_adjacency_matrix()`.
+
+```{r}
+# Create a graph from an adjacency matrix
+g <- graph_from_adjacency_matrix(adjm)
+
+g
+plot(g)
+```
+
+### Option 3: from an edge list
+
+Another very common way of representing networks in data consists in using
+**edge lists**, which are data frames containing the edges in columns 1 and 2.
+Any additional columns will be interpreted as (optional) edge attributes.
+Let's simulate an edge list.
+
+```{r}
+# Simulate an edge list
+edgelist <- data.frame(
+    from = c("A", "A", "B"),
+    to = c("B", "C", "C")
+)
+
+edgelist
+```
+
+As in an adjacency matrix, you could also add a third column indicating
+the strength of the edge. You can create an `igraph` object from an edge list 
+with the functions `graph_from_edgelist()` or `graph_from_data_frame()`.
+
+```{r}
+# Create a graph from an edge list
+g <- graph_from_edgelist(as.matrix(edgelist))
+g2 <- graph_from_data_frame(edgelist)
+
+identical_graphs(g, g2)
+
+plot(g)
+```
+
+## Understanding and constructing different network types
+
+Graphs can be classified into different types based on edge attributes
+named **directionality** and **weight**. These graph types are:
+
+1. **Directed** vs **undirected**: in directed graphs, edges have a 
+direction (i.e., *from* a node *to* another), while in undirected graphs
+such directions do not exist.
+2. **Weighted** vs **unweighted**: in weighted graphs, edges have weights
+indicating the strength of association between two nodes, while in unweighted
+graphs edges are binary.
+
+To demonstrate how to create these different graph types, consider the 
+edge list below:
+
+```{r}
+# Create edge list with weights
+edges <- data.frame(
+    from = c("A", "A", "B", "C"),
+    to = c("B", "C", "C", "D"),
+    weight = sample(seq(0, 1, by = 0.1), 4)
+)
+
+edges
+```
+
+You can create four different graph types from this edge list by
+playing with arguments in `graph_from_data_frame()`:
+
+```{r}
+# Graph 1: unweighted, undirected
+g1 <- graph_from_data_frame(edges[, c(1,2)], directed = FALSE)
+
+# Graph 2: unweighted, directed
+g2 <- graph_from_data_frame(edges[, c(1,2)], directed = TRUE)
+
+# Graph 3: weighted, undirected
+g3 <- graph_from_data_frame(edges, directed = FALSE)
+
+# Graph 4: weighted, directed
+g4 <- graph_from_data_frame(edges, directed = TRUE)
+
+# Show igraph objects
+list(g1, g2, g3, g4)
+```
+
+When the edge list includes a third column with a numeric variable, the
+function `graph_from_data_frame()` automatically adds it as an edge attribute
+named **weight**. You can add as many edge attributes as you wish.
+
+Besides adding edge attributes, you can also add node (or vertex) attributes.
+In the example below, we create a more complex graph, with multiple edge and
+node attributes.
+
+```{r}
+# Create edge list with two edge attributes
+edges <- data.frame(
+    from = c("A", "A", "B", "C"),
+    to = c("B", "C", "C", "D"),
+    weight = sample(seq(-1, 1, by = 0.1), 4)
+)
+edges$weight_type <- ifelse(edges$weight > 0, "positive", "negative")
+
+edges
+
+# Create a data frame of node attributes
+node_attrs <- data.frame(
+    node = c("A", "B", "C", "D"),
+    group = c(1, 1, 2, 2)
+)
+
+node_attrs
+
+# Create a graph with both edge and node attributes
+cg <- graph_from_data_frame(edges, directed = FALSE, vertices = node_attrs)
+
+cg
+
+# Printing node and edge attributes
+vertex_attr_names(cg)
+edge_attr_names(cg)
+```
+
+::: {.callout-tip}
+
+### Practice
+
+1. The code below creates a correlation matrix from the `mtcars` data set.
+Use this correlation matrix to create an undirected weighted graph.
+
+```{r}
+cormat <- cor(t(mtcars[, c(1, 3:7)]))
+```
+
+2. The code below converts the correlation matrix created above to an edge 
+list. Create the same graph you created before, but now from an edge list.
+Then, check if graphs are indeed the same. 
+
+*Hint:* use the `simplify()` function to remove loops (edges that connect
+a node to itself).
+
+```{r}
+cormat_edges <- reshape2::melt(cormat)
+```
+
+3. From the edge list created above, add an edge attribute named `strength`
+that contains the character **strong** for edges with weight >=0.9, 
+and **moderate** otherwise. Then, create a graph and inspect this attribute.
+
+4. From the edge list created in question 3, create a data frame
+of node attributes containing an attribute named `brand` containing the brands
+of each car.
+
+::: {.callout appearance="minimal" collapse="true"}
+
+### Show me the solutions
+
+```{r}
+# Q1
+g <- graph_from_adjacency_matrix(
+    cormat, mode = "undirected", weighted = TRUE, diag = FALSE
+)
+
+# Q2
+g2 <- graph_from_data_frame(cormat_edges, directed = FALSE)
+isomorphic(g, simplify(g2))
+
+# Q3
+g3 <- cormat_edges |>
+    mutate(strength = ifelse(value >= 0.9, "strong", "moderate")) |>
+    graph_from_data_frame(directed = FALSE)
+
+# Q4
+brands <- data.frame(node = unique(c(cormat_edges$Var1, cormat_edges$Var2))) |>
+    mutate(brand = gsub(" .*", "", node))
+
+g4 <- graph_from_data_frame(cormat_edges, directed = FALSE, vertices = brands)
+```
+
+:::
+:::
+
+## Manipulating `igraph` objects
+
+To add or remove nodes from an `igraph` object, you can use the 
+functions `add_vertices()` and `delete_vertices()` as demonstrated below:
+
+```{r}
+#| layout-ncol: 3
+#| fig-height: 8
+#| fig-dpi: 300
+
+# Create empty graph with 4 nodes
+g <- make_empty_graph(4)
+plot(g)
+
+# Add 3 nodes
+g <- add_vertices(g, 3)
+plot(g)
+
+# Remove nodes 6 and 7
+g <- delete_vertices(g, c(6, 7))
+plot(g)
+```
+
+Similarly, you can add edges to an `igraph` object with the function
+`add_edges()`.
+
+```{r}
+#| layout-ncol: 2
+#| fig-height: 8
+#| fig-dpi: 300
+
+# Create empty graph with 4 nodes
+g <- make_empty_graph(4)
+plot(g)
+
+# Add edges 1--2, 1--3 and 1--4
+g <- add_edges(g, edges = c(1,2, 1,3, 1,4))
+plot(g)
+```
+
+To remove edges, you will first need to get the IDs of the edges you want to
+remove. This can be done with the function `get.edge_ids()`. Once you have the
+IDs of the edges to be removed, you can use the function `delete_edges()` to
+do so.
+
+```{r}
+# Get IDs of edges 1--2 and 1--3
+ids_remove <- get.edge.ids(g, c(1,2, 1,3))
+
+# Remove edges indicated in `ids_remove`
+g <- delete_edges(g, ids_remove)
+
+plot(g)
+```
+
+Besides adding/removing nodes and edges, you can also add/remove node and edge
+attributes. These can be done in two ways: with the functions
+`set_vertex_attr()` and `set_edge_attr()`, or using the `$` operator in the 
+output of `V()` and `E()` the same way you do when adding a variable 
+to a data frame. For example, consider the graph below.
+
+```{r}
+# Create graph using the 'Zachary' (karate club) data set
+g <- make_graph("Zachary")
+
+plot(g)
+```
+
+You can add node attributes using one of the following approaches:
+
+```{r}
+# Simulate a node attribute `sex` with 'male' and 'female'
+sex <- sample(c("male", "female"), vcount(g), replace = TRUE)
+
+# Approach 1: set_vertex_attr()
+g1 <- set_vertex_attr(g, "gender", value = sex)
+
+vertex_attr_names(g1)
+V(g1)$gender
+
+# Approach 2: $ operator
+g2 <- g
+V(g2)$gender <- sex
+
+vertex_attr_names(g2)
+V(g2)$gender
+
+# Checking if graphs are the same
+identical_graphs(g1, g2)
+```
+
+The same can be done for edge attributes.
+
+```{r}
+# Simulate an edge attribute `weight`
+weight <- runif(ecount(g), 0, 1)
+
+# Approach 1: set_edge_attr()
+g1 <- set_edge_attr(g, "weight", value = weight)
+
+edge_attr_names(g1)
+E(g1)$weight
+
+# Approach 2: $ operator
+g2 <- g
+E(g2)$weight <- weight
+
+edge_attr_names(g2)
+E(g2)$weight
+
+# Checking if graphs are the same
+identical_graphs(g1, g2)
+```
+
+
+::: {.callout-tip}
+
+### Practice
+
+1. Use the code below to create an `igraph` object.
+
+```{r}
+# Create `igraph` object from mtcars data set
+graph <- cor(t(mtcars[, c(1, 3:7)])) |> 
+    graph_from_adjacency_matrix(
+        mode = "undirected", weighted = TRUE, diag = FALSE
+    )
+```
+
+Then, add the following attributes:
+
+- An edge attribute named `strength` that contains the character 
+**strong** for edges with weight >=0.9, and **moderate** otherwise.
+- A node attribute named `brand` containing the brands of each car.
+
+*Hint:* this is the same exercise you did in a previous section, but now
+you're adding attributes using the `igraph` object itself, not the
+graph's edge list.
+
+2. Using the graph created above, remove edges with attribute `weight` <0.95.
+
+*Hint:* you can use logical subsetting to extract edges that match the
+required condition.
+
+::: {.callout appearance="minimal" collapse="true"}
+
+### Show me the solutions
+
+```{r}
+# Q1
+E(graph)$strength <- ifelse(E(graph)$weight >= 0.9, "strong", "moderate")
+V(graph)$brand <- gsub(" .*", "", V(graph)$name)
+
+E(graph)$strength
+V(graph)$brand
+
+# Q2
+edges_remove <- E(graph)[E(graph)$weight < 0.95]
+fgraph <- delete_edges(graph, edges_remove)
+```
+
+:::
+:::
+
+## Subsetting nodes and edges
+
+To subset particular nodes and edges from an `igraph` object, you can
+use subsetting (logical or index-based) based on the output of `V()` 
+and `E()`, respectively. For instance, consider the graph below:
+
+```{r}
+# Create Scooby-Doo network
+edges <- data.frame(
+    from = c("Fred", "Fred", "Fred", "Velma", "Daphne", "Shaggy"),
+    to = c("Velma", "Daphne", "Shaggy", "Shaggy", "Shaggy", "Scooby")
+)
+
+g <- graph_from_data_frame(edges, directed = FALSE)
+
+g
+plot(g)
+```
+
+To demonstrate how to subset nodes, let's subset only nodes 'Shaggy' and
+'Scooby'.
+
+```{r}
+# Subset nodes 'Scooby' and 'Shaggy'
+V(g)["Scooby", "Shaggy"]
+
+# Same, but using indices
+V(g)[c(4,5)]
+
+# Same again, but using logical subsetting
+V(g)[startsWith(name, "S")]
+```
+
+In the third example above, note how node attributes (`name`) can be directly
+used for subsetting inside the brackets of `V()`.
+
+To subset edges, you'd use the same approach, but now with the `E()` function.
+As an example, let's subset all edges that include node 'Shaggy'.
+
+```{r}
+# Subset edges including node 'Shaggy'
+E(g)[.from("Shaggy")]
+
+# Same, but using indices
+E(g)[3:6]
+```
+
+::: {.callout-tip}
+
+### Practice
+
+Use the code below to load an `igraph` object containing character 
+relationships in the TV show "Game of Thrones".
+
+```{r}
+# Load Game of Thrones network
+got <- readRDS(here("data", "got.rds"))
+```
+
+Then, subset the edges that include the characters 'Arya', 'Sansa', 'Jon',
+'Robb', 'Bran', and 'Rickon'. Which of these characters has more connections?
+
+
+::: {.callout appearance="minimal" collapse="true"}
+
+### Show me the solutions
+
+```{r}
+# Q1
+stark_connections <- list(
+    Arya = E(got)[.from("Arya")],
+    Sansa = E(got)[.from("Sansa")],
+    Jon = E(got)[.from("Jon")],
+    Robb = E(got)[.from("Robb")],
+    Bran = E(got)[.from("Bran")],
+    Rickon = E(got)[.from("Rickon")]
+)
+
+lengths(stark_connections)
+```
+
+:::
+:::
+
+## Exporting graphs
+
+Sometimes, users want to export their `igraph` objects to a file
+so they can visualize them in a network visualization software. This can
+be done with the function `write_graph()`, which exports `igraph` objects
+to multiple formats specified in the argument *format* (see `?write_graph()`
+for details). 
+
+For example, [Cytoscape](https://cytoscape.org/) is a very 
+popular graph visualization tool, and it can take graphs as edge lists.
+To export `igraph` objects to edge lists, you could use the following code:
+
+```{r}
+#| eval: false
+
+# Export graph in `g` to a file named 'edgelist.txt'
+write_graph(g, file = "edgelist.txt", format = "edgelist")
+```
+
+
+## Session information {.unnumbered}
+
+This chapter was created under the following conditions:
+
+```{r}
+#| echo: false
+sessioninfo::session_info()
+```

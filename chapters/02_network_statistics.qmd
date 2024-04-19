@@ -1,0 +1,586 @@
+---
+execute: 
+  warning: false
+---
+
+# Network statistics
+
+In this lesson, you will learn to perform descriptive analyses of networks,
+including calculation of network statistics, and community detection.
+At the end of this lesson, you will be able to:
+
+- understand and calculate the main network-, node-, and edge-level statistics;
+- identify communities (or clusters) in networks using different algorithms;
+- assess network cohesion.
+
+Let's start by loading the packages we will use.
+
+```{r}
+#| message: false
+
+set.seed(123) # for reproducibility
+
+# Load required packages
+library(here)
+library(tidyverse)
+library(igraph)
+library(igraphdata)
+```
+
+## Node-level statistics
+
+In a graph, some nodes are thought to be more important than others. However,
+"important" is a quite subjective term, so we need formal ways of measuring how 
+central a node is in a network. These metrics are often referred to as 
+*centrality measures*. There are many of such metrics, but some of the most
+commonly used are:
+
+1. **Degree:** number of connections of a node *N*. In weighted graphs,
+this is usually measured as the sum of weights of the edges containing 
+node *N*. In directed graphs, we often distinguish 
+between **in-degree** (number of ingoing edges) and **out-degree** (number
+of outgoing edges).
+
+2. **Closeness:** the average length of the shortest path between a node *N*
+and all other nodes in the graph.
+
+3. **Betweenness:** the number of shortest paths going through a node,
+which quantifies the number of times a node acts as a bridge along the
+shortest path between two other nodes.
+
+4. **Eigenvector centrality:** first eigenvector of the graph's adjacency
+matrix.
+
+5. **Harmonic centrality:** the mean inverse distance of a node *N* to all
+other nodes.
+
+To demonstrate how to calculate these node statistics, consider the following
+graph:
+
+```{r}
+g <- make_graph("Krackhardt kite")
+plot(g)
+```
+
+Let's calculate different centrality measures:
+
+```{r}
+# Degree
+c1 <- degree(g)
+
+# Closeness
+c2 <- closeness(g)
+
+# Betweenness
+c3 <- betweenness(g)
+
+# Eigenvector centrality
+c4 <- eigen_centrality(g)$vector
+
+# Harmonic centrality
+c5 <- harmonic_centrality(g)
+
+# Show all measures
+centrality_summary <- data.frame(
+    node = as.character(V(g)),
+    degree = c1,
+    closeness = c2,
+    betweenness = c3,
+    eigenvector = c4,
+    harmonic = c5
+)
+
+centrality_summary
+```
+
+Note how the "most important" node in the graph changes depending on the
+centrality measure used. This example nicely illustrates the importance of 
+using different centrality measures to assess a node's importance in a graph. 
+
+::: {.callout-tip}
+
+### Practice
+
+Use the code below to load an `igraph` object containing character 
+relationships in the TV show "Game of Thrones". Then, answer the questions
+below using this graph.
+
+```{r}
+# Load Game of Thrones network
+got <- readRDS(here("data", "got.rds"))
+```
+
+1. Calculate the *degree*, *closeness*, *betweenness*, *eigenvector*, and
+*harmonic* centralities of all nodes in this network. Which character
+is the most central based on each of these measures?
+
+2. In network science, people often want to find hubs, which are the most
+highly connected nodes in a graph. Here, we will define as hubs the 
+top 10% most highly connected nodes. Based on this definition, identify
+hubs in the `got` network.
+
+::: {.callout appearance="minimal" collapse="true"}
+
+### Show me the solutions
+
+```{r}
+# Q1
+got_centrality <- data.frame(
+    degree = degree(got),
+    closeness = closeness(got),
+    betweenness = betweenness(got),
+    eigenvector = eigen_centrality(got)$vector,
+    harmonic = harmonic_centrality(got)
+)
+
+apply(got_centrality, 2, which.max)
+
+# Q2
+deg <- sort(degree(got), decreasing = TRUE)
+deg[seq_len(length(deg) * 0.1)]
+```
+
+:::
+:::
+
+## Edge-level statistics
+
+In network science, researchers usually can answer their questions by
+exploring node statistics. However, some questions can only be answered
+by analyzing edge statistics. For example, one might be interested in
+knowing which connections are more important for the flow of information
+(in social networks) or a molecular signal (in molecular networks). 
+
+
+The most common edge-level statistic is the **edge betweenness**, which is 
+an extension of node betweenness describing the number of shortest paths
+traversing an edge *E*. Let's calculate edge betweenness for all egdes in the
+graph we created before.
+
+```{r}
+# Calculate edge betweenness
+edge_betweenness(g)
+```
+
+If you want to extract edges that have the highest betweenness, you'd do
+the following:
+
+```{r}
+# Extract edges with the highest betweenness centrality
+eb <- edge_betweenness(g)
+as_edgelist(g)[which.max(eb), ]
+```
+
+While the betweenness centrality can be extended to edges, other node 
+centrality measures do not. One way to circumvent this is to create 
+a **line graph** of a graph *G*, and then calculate centrality measures
+for the nodes of the line graph. A line graph of *G*, *G' = (V', E')*,
+is obtained by changing the nodes of a graph to edges, and edges to nodes.
+You can do that with __igraph__ using the function `make_line_graph()`.
+
+```{r}
+# Obtaining the line graph G' of a graph G
+lg <- make_line_graph(g)
+lg
+```
+
+Once you have the line graph of a graph *G*, you can calculate node centrality
+measures as described in the previous section (e.g., degree, closeness, etc.).
+Since nodes and edges have been swapped, node statistics of a line graph
+actually describe edge statistics of the original graph.
+
+::: {.callout-tip}
+
+### Practice
+
+Using the Game of Thrones graph from the previous practice problems,
+answer the questions below:
+
+1. Which edges have the highest betweenness?
+
+2. Create the line graph of this graph and calculate the degree, betweenness, 
+and closeness of the line graph. Are the nodes with the highest values for
+each of these measures the same?
+
+::: {.callout appearance="minimal" collapse="true"}
+
+### Show me the solutions
+
+```{r}
+# Q1
+eb <- edge_betweenness(got)
+as_edgelist(got)[which.max(eb), ]
+
+# Q2
+lgot <- make_line_graph(got)
+max_degree <- which.max(degree(lgot))
+max_closeness <- which.max(closeness(lgot))
+max_betweenness <- which.max(betweenness(lgot))
+
+list(max_degree, max_closeness, max_betweenness)
+```
+
+:::
+:::
+
+
+
+## Assessing network cohesion
+
+Network cohesion refers to the extent to which subsets of nodes are
+cohesive with respect to the relation defining edges in the graph. In
+molecular biology, for example, assessing network cohesion can reveal what
+proteins seem to work closely together in a cell; in social networks, one
+can investigate whether friends of person A tend to be friends of person B
+as well. There are many ways of assessing network cohesion, and we will
+explore the most common ones in the sections below.
+
+### Subgraphs and censuses
+
+A popular way of defining network cohesion consists in analyzing frequencies
+of particular types of subgraphs. One of the most remarkable subgraphs
+is the **clique**, which are complete subgraphs (all nodes are connected
+by edges). Using the karate club network, let's count the frequency of cliques
+of each size.
+
+Cliques and maximal cliques
+
+```{r}
+# Create karate club graph
+g <- make_graph("Zachary")
+
+# Count frequency of cliques of each size
+table(lengths(cliques(g)))
+```
+
+Cliques of size 1 and 2 indicate nodes and edges, respectively, so they
+are are usually ignored when assessing network cohesion. Ignoring those,
+the table above shows that most of the cliques (N = 45) are triangles (size
+three), and the maximum clique size is 5.
+
+However, note that larger cliques can include smaller cliques, leading
+to some sort of redundancy. Because of that, it is often interesting
+to identify **maximal cliques**, which are defined as cliques that are not
+a subset of a larger clique. Let's now count the frequency of maximal cliques.
+
+```{r}
+# Count the frequency of maximal cliques of each size
+table(lengths(max_cliques(g)))
+```
+
+Besides cliques, other important types of subgraphs include dyads (pairs
+of nodes) and triads (triples of nodes), especially in directed graphs. 
+In directed graphs, dyads can take on three possible states:
+null (no directed edge), assymetric (one directed edge), or mutual (two
+directed edges). Likewise, triads can take on 16 possible states. 
+
+To perform a census of the possible states of dyads and triads, you can use 
+the functions `dyad_census()` and `triad_census()`, respectively. Let's 
+demonstrate it with the `enron` email network (emails generated by 500k 
+employees of the Enron Corporation).
+
+```{r}
+# Load data set
+data(enron)
+
+# Get dyad census (frequency of dyad states)
+dyad_census(enron)
+```
+
+In this data set, we can see that, among non-null states, most dyads are
+assymetric.
+
+
+Finally, **motifs** are another commonly studied type of subgraph,
+especially in biological networks, and they are defined as small 
+connected subgraphs that appear more often than the expected by chance. 
+Below is an example of how to count motifs of size 3.
+
+```{r}
+# Get frequecy of motifs of size 3
+motifs(g, size = 3)
+```
+
+The order of the motifs is defined by their isomorphism class (see
+`?isomophism_class` for details). Note that unconnected subgraphs are not 
+considered to be motifs, so their frequencies will be result in NA.
+
+### Relative frequency-based measures
+
+A common measure of network cohesion is the **density** of a graph, which
+describes the frequency of existing edges relative to the potential number
+of edges. This is a number that ranges between 0 and 1, and it can
+be estimated with the function `edge_density()`. Let's demonstrate it
+by calculating the density of the entire graph for the karate club network,
+and for a subgraph containing only one of the instructors and its first-order
+neighbors
+
+```{r}
+# Calculate density of the entire graph
+edge_density(g)
+
+# Calculate density of subgraph containing instructor (node 24) and neighbors
+sg <- induced_subgraph(g, neighborhood(g, 1, 34)[[1]])
+edge_density(sg)
+```
+
+A somewhat similar measure is the **clustering coefficient**, which describes
+the number of connected triples that close to form triangles. This measure
+is also referred to as **transitivity**, which is why the __igraph__ function 
+to calculate it is called `transitivity()`. To calculate the clustering
+coefficient of the entire graph, you'd do as follows:
+
+```{r}
+# Calculate clustering coefficient of the graph
+transitivity(g)
+```
+
+
+Finally, another measure that only applies to *directed graphs* is the
+**reciprocity** of a graph, which defines the number of dyads with reciprocated
+(i.e., mutual) directed egdes divided by the number of dyads with a single,
+unreciprocated edge. Let's calculate the reciprocity of the `enron` network.
+
+```{r}
+# Calculate reciprocity of the `enron` network
+reciprocity(g)
+```
+
+### Connectivity and cuts
+
+Researchers usually want to find out whether a graph separates into distinct
+subgraphs. In this context, a graph is said to be *connected* if every node 
+is reachable from every other. To find out if a graph is connected,
+you can use the function `is_connected()`. Let's demonstrate it in a network
+of protein-protein interactions in yeast (N = 2617 nodes).
+
+```{r}
+# Load yeast protein-protein interaction network
+data(yeast)
+
+# Check if the network is connected
+is_connected(yeast)
+```
+
+The fact that the network is not connected means that this large graph is 
+broken into components. In such graphs, it often happens that one of these 
+components is much larger than all the others, and this is called 
+the **giant component**. To investigate if the `yeast` network contains a giant
+component, let's decompose this graph into different components and count the 
+number of nodes per component.
+
+```{r}
+# Decompose the graph and count number of nodes in each component
+comps <- decompose(yeast)
+table(lengths(comps))
+```
+
+We can see that there's a single component with 2735 nodes (~90% of the total
+number of nodes), while other components have very few nodes. When this is the
+case, it is common practice to restrict further analyses to the giant component
+only, as the other smaller components are not very informative. Let's extract
+the giant component.
+
+```{r}
+# Extract giant component
+yeast_gc <- decompose(yeast)[[1]]
+```
+
+Giant components usually display a remarkable characteristic termed 
+**small world** property, which means that the average shortest-path distance
+is small, but clustering coefficient is high. Let's check if this is the case
+here:
+
+```{r}
+# Get average path length and diameter
+mean_distance(yeast_gc)
+diameter(yeast_gc)
+
+# Get clustering coefficient
+transitivity(yeast_gc)
+```
+
+Indeed, this giant component has a small average shortest-path distance, and
+relatively high clustering coefficient.
+
+In a graph, there are usually some nodes that, if removed, can disconnect the
+graph. These are called **articulation points** or **cut nodes**, and they
+typically indicate parts of a network that are vulnerable to attacks.
+You can identify them with the function `articulation_points()` as below:
+
+```{r}
+# Get articulation points
+ap <- articulation_points(yeast_gc)
+length(ap)
+```
+
+In the giant component of the yeast network, 350 nodes are articulation points.
+
+::: {.callout-tip}
+
+### Practice
+
+Using the Game of Thrones graph from the previous practice problems, answer
+the questions below.
+
+1. How many cliques of each size are there? What is the size of the largest
+clique?
+
+2. How many maximal cliques of each size are there? What is the size of the
+largest maximal clique?
+
+3. What is the network's density and clustering coefficient?
+
+4. If this network connected?
+
+5. What is the network's average shortest-path distance and diameter?
+
+6. How many articulation points are there? What percentage of the total number
+of nodes does that represent?
+
+::: {.callout appearance="minimal" collapse="true"}
+
+### Show me the solutions
+
+```{r}
+# Q1
+gcl <- cliques(got)
+table(lengths(gcl))
+
+# Q2
+mgcl <- max_cliques(got)
+table(lengths(mgcl))
+
+# Q3
+edge_density(got)
+transitivity(got)
+
+# Q4
+is_connected(got)
+
+# Q5
+mean_distance(got)
+diameter(got)
+
+# Q6
+articulation_points(got)
+length(articulation_points(got)) / vcount(got)
+```
+
+:::
+:::
+
+## Community detection
+
+Identifying communities or clusters in a graph is one of the most common
+analyses in network science. This is a way of identifying subgraphs
+containing more closely-related nodes, and it has many implications in
+different fields. In biology, for instance, this can be used to identify
+genes or proteins involved in the same biological process; in social
+network science, this can reveal individuals that share traits and/or 
+interests.
+
+In __igraph__, you can identify communities using a family of functions named
+`cluster_*()`, and each function detects communities using a different
+algorithm. The Infomap algorithm is arguably one of the most popular of them,
+and it's available in the function `cluster_infomap()`. Let's demonstrate it.
+
+```{r}
+# Create graph
+g <- make_graph("Zachary")
+plot(g)
+
+# Detect communities with Infomap
+cl <- cluster_infomap(g)
+cl
+```
+
+In the output of `cluster_infomap()`, we can observe that the Infomap algorithm
+identified 3 clusters, whose members are described below each cluster ID.
+You can also extract cluster membership for each node with the functions
+`membership()` and `communities()`, which return a vector or membership and a
+list, respectively.
+
+```{r}
+# Vector of cluster membership for each node
+membership(cl)
+
+# List of nodes that belong to each cluster
+communities(cl)
+```
+
+The generic `plot()` function can also be used to quickly visualize
+the graph with clusters highlighted.
+
+```{r}
+# Visualize graph with communities highlighted
+plot(cl, g)
+```
+
+If you have communities detected with different algorithms, you can use
+the function `compare()` to calculate the distance between two community
+structures. To demonstrate, let's detect communities using another
+very popular algorithm named Louvain.
+
+```{r}
+# Detect community with Louvain
+cl2 <- cluster_louvain(g)
+
+# Compare community structures
+compare(cl, cl2)
+```
+
+The function `compare()` can calculate distances between community
+structures using different methods. For more details on all methods, see
+the function's help page (with `?compare`).
+
+::: {.callout-tip}
+
+### Practice
+
+Using the Game of Thrones graph from the previous practice problems,
+identify communities using the Infomap, Louvain, Leiden, and 
+label propagation algorithms. Then, answer the questions below.
+
+1. How many clusters were detected by each algorithm?
+
+2. Calculate the distance between the community structures detected with 
+Infomap and all other methods. What do you conclude based on the results?
+
+
+::: {.callout appearance="minimal" collapse="true"}
+
+### Show me the solutions
+
+```{r}
+# Q1
+clist <- list(
+    Infomap = cluster_infomap(got),
+    Louvain = cluster_louvain(got),
+    Leiden = cluster_leiden(got),
+    Label_prop = cluster_label_prop(got)
+)
+
+lengths(clist)
+
+# Q2
+list(
+    compare(clist$Infomap, clist$Louvain),
+    compare(clist$Infomap, clist$Leiden),
+    compare(clist$Infomap, clist$Label_prop)
+)
+```
+
+:::
+:::
+
+
+## Session information {.unnumbered}
+
+This chapter was created under the following conditions:
+
+```{r}
+#| echo: false
+sessioninfo::session_info()
+```
+

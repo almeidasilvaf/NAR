@@ -1,0 +1,17 @@
+{
+  "hash": "f745cb841198fd3de1cadfb4ee951225",
+  "result": {
+    "engine": "knitr",
+    "markdown": "---\nexecute: \n  warning: false\n  eval: false\n---\n\n\n# Appendix: Data acquisition {.unnumbered}\n\nHere, I will describe how I obtained each example data set used in this course.\n\n\n::: {.cell}\n\n```{.r .cell-code}\nset.seed(123)\n\n# Required packages\nlibrary(here)\nlibrary(tidyverse)\nlibrary(igraph)\n```\n:::\n\n\n## got.rds\n\nThis file contains an `igraph` object with a network consisting of character\nrelationships in George R. R. Martin's *A Storm of Swords*, the third novel\nin his series *A Song of Ice and Fire*. Data were originally compiled by\n@beveridge2016network.\n\n\n::: {.cell}\n\n```{.r .cell-code}\n# Get edges\ngot_edges <- read_csv(\n    \"https://raw.githubusercontent.com/melaniewalsh/sample-social-network-datasets/master/sample-datasets/game-of-thrones/got-edges.csv\",\n    show_col_types = FALSE\n) |>\n    dplyr::rename(from = Source, to = Target, weight = Weight) |>\n    as.data.frame()\n\n# Get nodes\ngot_nodes <- read_csv(\n    \"https://raw.githubusercontent.com/melaniewalsh/sample-social-network-datasets/master/sample-datasets/game-of-thrones/got-nodes.csv\",\n    show_col_types = FALSE\n) |>\n    dplyr::rename(node = Id, label = Label) |>\n    as.data.frame()\n\n# Create igraph object\ngot <- graph_from_data_frame(\n    got_edges, directed = FALSE, vertices = got_nodes\n)\n\nsaveRDS(\n    got, compress = \"xz\", file = here(\"data\", \"got.rds\")\n)\n```\n:::\n\n\n\n## References {.unnumbered}\n\n",
+    "supporting": [
+      "appendix_01_data_acquisition_files"
+    ],
+    "filters": [
+      "rmarkdown/pagebreak.lua"
+    ],
+    "includes": {},
+    "engineDependencies": {},
+    "preserve": {},
+    "postProcess": true
+  }
+}

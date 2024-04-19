@@ -1,0 +1,56 @@
+---
+execute: 
+  warning: false
+  eval: false
+---
+
+# Appendix: Data acquisition {.unnumbered}
+
+Here, I will describe how I obtained each example data set used in this course.
+
+```{r}
+set.seed(123)
+
+# Required packages
+library(here)
+library(tidyverse)
+library(igraph)
+```
+
+## got.rds
+
+This file contains an `igraph` object with a network consisting of character
+relationships in George R. R. Martin's *A Storm of Swords*, the third novel
+in his series *A Song of Ice and Fire*. Data were originally compiled by
+@beveridge2016network.
+
+```{r}
+# Get edges
+got_edges <- read_csv(
+    "https://raw.githubusercontent.com/melaniewalsh/sample-social-network-datasets/master/sample-datasets/game-of-thrones/got-edges.csv",
+    show_col_types = FALSE
+) |>
+    dplyr::rename(from = Source, to = Target, weight = Weight) |>
+    as.data.frame()
+
+# Get nodes
+got_nodes <- read_csv(
+    "https://raw.githubusercontent.com/melaniewalsh/sample-social-network-datasets/master/sample-datasets/game-of-thrones/got-nodes.csv",
+    show_col_types = FALSE
+) |>
+    dplyr::rename(node = Id, label = Label) |>
+    as.data.frame()
+
+# Create igraph object
+got <- graph_from_data_frame(
+    got_edges, directed = FALSE, vertices = got_nodes
+)
+
+saveRDS(
+    got, compress = "xz", file = here("data", "got.rds")
+)
+```
+
+
+## References {.unnumbered}
+
